@@ -86,4 +86,37 @@
     lineinfile:
       path: "/home/{{ user }}/.bashrc"
       line: "export CSLE_HOME=/home/{{ user }}/csle"
-    when: variable_exists.rc != 0 
+    when: variable_exists.rc != 0
+
+  - name: Check if CSLE log directory exists
+    stat:
+      path: /var/log/csle
+    register: log_directory_exists
+
+  - name: Creates CSLE log directory
+    ansible.builtin.file:
+      path: /var/log/csle
+      state: directory 
+      mode: "0774"
+      owner: "{{ user }}"
+    when: not log_directory_exists.stat.exists
+
+  - name: Check if CSLE tmp directory exists
+    stat:
+      path: /tmp/csle
+    register: tmp_directory_exists
+
+  - name: Creates CSLE tmp directory
+    ansible.builtin.file:
+      path: /tmp/csle
+      state: directory
+      mode: "0774"
+      owner: "{{ user }}"
+    when: not tmp_directory_exists.stat.exists
+
+  - name: Add or modify sudoers configuration
+    lineinfile:
+      path: /etc/sudoers
+      line: "{{ user }} ALL= NOPASSWD: /usr/sbin/service docker stop, /usr/sbin/service docker start, /usr/sbin/service docker restart, /usr/sbin/service nginx stop, /usr/sbin/service nginx start, /usr/sbin/service nginx restart, /usr/sbin/service postgresql start, /usr/sbin/service postgresql stop, /usr/sbin/service postgresql restart, /bin/kill, /usr/bin/journalctl -u docker.service -n 100 --no-pager -e"
+      state: present
+      validate: 'visudo -cf %s'  # Validate the sudoers file syntax
