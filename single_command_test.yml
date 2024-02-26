@@ -1,0 +1,11 @@
+---
+
+- hosts: all
+  become: true
+  tasks:
+  
+    - name: Check if Anaconda is installed
+      become: yes
+      shell: /home/shahab/anaconda3/bin/conda --version
+      register: anaconda_installed
+      ignore_errors: true
