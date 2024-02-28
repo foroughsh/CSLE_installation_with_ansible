@@ -40,6 +40,12 @@
         state: present
         update_cache: yes
 
+    - name: Install expect lib
+      apt:
+        name: expect
+        state: present
+        update_cache: yes
+
     - name: Install pip
       apt:
         name: python3-pip
@@ -56,17 +62,20 @@
     - name: Set listen address using pg_conftool
       shell: "pg_conftool 15 main set listen_addresses '*'"
 
+
     - name: Run psql and set password for postgres user
       expect:
         command: sudo -u postgres psql -c "\password postgres"
         responses:
           Enter\ new\ password\ for\ user\ "postgres": "postgres"
           Enter\ it\ again: "postgres"  # Re-enter the password
+      ignore_errors: true
+
     - name: Replace first line in postgres config file
       lineinfile:
         path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
-        regexp: '^local\s+all\s+all\s+peer$'
-        line: "local\tall\t\tall\t\t\t\t\tmd5"
+        regexp: '^local\s+all\s+postgres\s+peer$'
+        line: "local\tall\t\tpostgres\t\t\t\tmd5"
         state: present
 
     - name: Replace second line in postgres config file
@@ -88,3 +97,45 @@
         line: "host\tall\t\tall\t\t172.31.212.0/24\t\ttrust"
         insertafter: EOF
         state: present
+
+    - name: Restart the postgreSQL
+      service:
+        name: postgresql
+        state: restarted
+
+    - name: Run the update-rc.d command
+      shell: update-rc.d postgresql enable
+
+    - name: Create PostgreSQL database
+      shell: |
+        expect -c '
+          spawn /bin/bash -c "/home/{{ user }}/csle/metastore && make db"
+          expect -re ".*Password.*"
+          send "postgres\r"
+          interact
+        '
+
+    - name: Create PostgreSQL cluster
+      shell: |
+        expect -c '
+          spawn /bin/bash -c "/home/{{ user }}/csle/metastore && make cluster"
+          expect -re ".*Password.*"
+          send "postgres\r"
+          interact
+        '
+
+    - name: Create PostgreSQL tables
+      shell: |
+        expect -c '
+          spawn /bin/bash -c "/home/{{ user }}/csle/metastore && make tables"
+          expect -re ".*Password.*"
+          send "postgres\r"
+          interact
+        '
+
+    - name: Change mode and ownership of the /var/log/postgresql
+      file:
+        path: /var/log/postgresql
+        owner: "{{ user }}"
+        mode: "0775"  # Specify the desired permissions here
+      become: true
