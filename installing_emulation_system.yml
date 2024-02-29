@@ -53,15 +53,9 @@
   - name: Add user to Docker group
     shell: sudo usermod -aG docker $USER
 
-  - name: Check if Docker Swarm is initialized
-    command: docker node ls
-    register: swarm_status
-    ignore_errors: yes
-
   - name: Initialize Docker Swarm
     command: docker swarm init --advertise-addr "{{ leader_ip }}"
-    when: "'This node is not a swarm manager' in swarm_status.stdout"
-    failed_when: false
+    ignore_errors: yes
 
   - name: Pulling base image
     shell: "cd /home/{{ user }}/csle/emulation-system/base_images && make pull"
