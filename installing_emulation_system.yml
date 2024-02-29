@@ -1,0 +1,81 @@
+---
+
+- hosts: all
+  become: true
+
+  vars:
+    user: "shahab"
+    leader_ip: "172.31.212.83"
+
+  tasks:
+
+  - name: Check if keyrings folder exist
+    stat:
+      path: /etc/apt/keyrings
+    register: keyrings_directory_exists
+
+  - name: Creates keyrings directory if it does not exist
+    ansible.builtin.file:
+      path: /etc/apt/keyrings
+      state: directory
+      mode: "0755"
+    when: not keyrings_directory_exists.stat.exists
+ 
+  - name: Download Docker GPG key and install GPG key
+    shell: |
+      expect -c '
+          spawn /bin/bash -c "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+          expect -re ".*Overwrite?.*"
+          send "y\r"
+          interact
+        '
+        
+  - name: Second command for installing keys
+    shell: echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+  - name: Update package cache
+    apt:
+      update_cache: yes
+
+  - name: Install Docker packages
+    apt:
+      name:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+      state: present
+
+  - name: Add Docker group
+    group:
+      name: docker
+      state: present
+
+  - name: Add user to Docker group
+    shell: sudo usermod -aG docker $USER
+
+  - name: Check if Docker Swarm is initialized
+    command: docker node ls
+    register: swarm_status
+    ignore_errors: yes
+
+  - name: Initialize Docker Swarm
+    command: docker swarm init --advertise-addr "{{ leader_ip }}"
+    when: "'This node is not a swarm manager' in swarm_status.stdout"
+    failed_when: false
+
+  - name: Pulling base image
+    shell: "cd /home/{{ user }}/csle/emulation-system/base_images && make pull"
+
+  - name: Pulling derived image
+    shell: |
+      cd "/home/{{ user }}/csle/emulation-system/derived_images" && \
+      make pull
+    args:
+      executable: /bin/bash
+
+  - name: Installing the envs on the leader node
+    shell: |
+      cd "/home/{{ user }}/csle/emulation-system/envs" && \
+      make install
+    args:
+      executable: /bin/bash
