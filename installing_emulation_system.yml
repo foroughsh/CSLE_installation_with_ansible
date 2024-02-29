@@ -69,6 +69,7 @@
 
   - name: Installing the envs on the leader node
     shell: |
+      source "/home/{{ user }}/anaconda3/bin/activate" py39 && \
       cd "/home/{{ user }}/csle/emulation-system/envs" && \
       make install
     args:
