@@ -38,7 +38,7 @@
   - name: Download anaconda
     ansible.builtin.get_url:
       url: "{{ anaconda_url }}"
-      dest: /home/shahab
+      dest: "/home/{{ user }}"
       mode: '0770'
     when: anaconda_installed.rc != 0
 

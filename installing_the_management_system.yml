@@ -1,0 +1,47 @@
+---
+
+- hosts: all
+  #become: true
+
+  vars:
+    user: "shahab"
+    leader_ip: "172.31.212.83"
+
+
+  tasks:
+
+
+  - name: Check if nvm is installed
+    shell: |
+      source "/home/{{ user }}/.nvm/nvm.sh" && \
+      nvm -v
+    args:
+      executable: /bin/bash
+    register: nvm_installed
+    ignore_errors: true
+
+  - debug:
+      var: nvm_installed
+
+  - name: Download nvm
+    ansible.builtin.get_url:
+      url: "https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh"
+      dest: "/home/{{ user }}"
+      mode: '0755'
+      owner: "{{ user }}"
+    when: nvm_installed.rc != 0
+
+  - name: Set NVM_DIR environment variable
+    shell: |
+      "/home/{{ user }}/install.sh"
+      export NVM_DIR="/home/{{ user }}/.nvm"
+      if [ -s "$NVM_DIR/nvm.sh" ]; then
+          . "$NVM_DIR/nvm.sh"
+      fi
+    args:
+      executable: /bin/bash
+    register: script_output
+
+  - debug:
+      var: script_output
+
