@@ -27,7 +27,16 @@ ansible-playbook --ask-become-pass installing_the_management_system.yml
 
 ### Debugging
 If the installation fails at some step, you can debug the reason for the failure by adding the following 
-line to the ansible playbook.. todo
+line to the Ansible playbook. First, we register a variable that holds a dictionary of the output for the module in that task. In the given example git_installation is this variable. In the next lines, we use debug to print the variable. 
+
+```bash
+- name: Installation of git
+    apt:
+      name: git
+    register: git_installation
+- debug:
+    var: git_installation
+```
 
 ## Author & Maintainer
 
