@@ -6,6 +6,8 @@
   vars:
     user: "shahab"
     leader_ip: "172.31.212.83"
+    nginx_content_name: "Nginx_configuration_content.txt"
+    web_port: 7777
 
 
   tasks:
@@ -40,8 +42,132 @@
       fi
     args:
       executable: /bin/bash
-    register: script_output
+    when: nvm_installed.rc != 0
 
-  - debug:
-      var: script_output
 
+  - name: Check if node is installed
+    shell: |
+      source "/home/{{ user }}/.nvm/nvm.sh" && \
+      node -v
+    args:
+      executable: /bin/bash
+    register: nvm_node_installed
+    ignore_errors: true
+
+  - name: Using nvm to install nodes
+    shell: |
+      source "/home/{{ user }}/.nvm/nvm.sh" && \
+      nvm install node 
+    args:
+      executable: /bin/bash
+    when:
+      - nvm_installed.rc == 0 
+      - nvm_node_installed.rc != 0
+    ignore_errors: true
+
+  - name: Check if npm is installed
+    shell: |
+      source "/home/{{ user }}/.nvm/nvm.sh" && \
+      npm -v
+    args:
+      executable: /bin/bash
+    register: npm_installed
+    ignore_errors: true
+
+  - name: Installing npm
+    shell: |
+      source "/home/{{ user }}/.nvm/nvm.sh" && \
+      npm install -g npm
+    args:
+      executable: /bin/bash
+    when:
+      - nvm_installed.rc == 0
+      - npm_installed.rc != 0
+    ignore_errors: true
+
+  - name: Install and build web application
+    become: true
+    shell: |
+      source "/home/{{ user }}/.nvm/nvm.sh" && \
+      cd "/home/{{ user }}/csle/management-system/csle-mgmt-webapp" && \
+      npm install --legacy-peer-deps
+      npm run build
+    args:
+      executable: /bin/bash
+    when:
+      - nvm_installed.rc == 0
+      - npm_installed.rc == 0
+    ignore_errors: true
+
+  - name: Check if port 7778 is available
+    wait_for:
+      port: 7778
+      state: started
+      timeout: 5   # Adjust timeout value as needed
+    ignore_errors: true
+    register: port_check_result
+
+  - name: install and start pgadmin
+    become: true
+    shell: |
+      docker pull dpage/pgadmin4
+      docker run -p 7778:80 -e "PGADMIN_DEFAULT_EMAIL=user@domain.com" -e "PGADMIN_DEFAULT_PASSWORD=SuperSecret" -d dpage/pgadmin4
+    args:
+      executable: /bin/bash
+    ignore_errors: true
+    when: port_check_result == 0
+
+  - name: Copy content of local Nginx file to remote server
+    become: true
+    copy:
+      content: "{{ lookup('file', '{{ nginx_content_name }}') }}"
+      dest: /etc/nginx/sites-available/default
+
+  - name: Restart the nginx service
+    become: true
+    service:
+      name: nginx 
+      state: restarted
+
+  - name: Change permissions on /var/log/nginx
+    become: true
+    command: sudo chmod -R u+rw /var/log/nginx
+
+  - name: Change ownership of /var/log/nginx
+    become: true
+    command: sudo chown -R "{{ user }}" /var/log/nginx
+
+  - name: Restart the nginx service
+    become: true
+    service:
+      name: nginx  # Replace with the name of your service
+      state: restarted
+
+  - name: Check if the Prometheus folder exists
+    stat:
+      path: "/home/{{ user }}/csle/management-system/prometheus"
+    register: folder_stat
+
+  - name: Install Prometheus and node exporter
+    become: true
+    shell: |
+      cd "/home/{{ user }}/csle/management-system" && \
+      chmod u+x install.sh && \
+      ./install.sh
+    args:
+      executable: /bin/bash
+    when: folder_stat == 0
+
+  - name: Modify serverIp.js file
+    become: true
+    lineinfile:
+      path: "/home/{{ user }}/csle/management-system/csle-mgmt-webapp/src/components/Common/serverIp.js"
+      regexp: '^const serverIp ='
+      line: 'const serverIp = "{{ ansible_host }}";'
+
+  - name: Modify serverPort.js file
+    become: true
+    lineinfile:
+      path: "/home/{{ user }}/csle/management-system/csle-mgmt-webapp/src/components/Common/serverPort.js"
+      regexp: '^const serverPort ='
+      line: 'const serverPort = "{{ web_port }}";'
