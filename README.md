@@ -22,7 +22,7 @@ Before starting the CSLE installation, open the file XXX and configure the follo
 ## Installing CSLE
 To install CSLE with ansible, run the following commands:
 ```bash
-todo
+ansible-playbook --ask-become-pass installing_the_management_system.yml
 ```
 
 ### Debugging
