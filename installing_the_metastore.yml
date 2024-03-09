@@ -8,6 +8,7 @@
     postgresql_url: "https://install.citusdata.com/community/deb.sh"
     user: "shahab"
     postgres_version: "15"
+    leader_IP: "172.31.212.90"
 
   tasks:
     
@@ -109,29 +110,40 @@
     - name: Create PostgreSQL database
       shell: |
         expect -c '
-          spawn /bin/bash -c "/home/{{ user }}/csle/metastore && make db"
+          spawn /bin/bash -c "cd /home/{{ user }}/csle/metastore; make db"
           expect -re ".*Password.*"
           send "postgres\r"
           interact
         '
+      register: make_db
+    - debug:
+        var: make_db
+
+    - name: Modify create_cluster.sql file
+      lineinfile:
+        path: "/home/{{ user }}/csle/metastore/create_cluster.sql"
+        regexp: '^SELECT citus_set_coordinator_host'
+        line: "SELECT citus_set_coordinator_host('{{ leader_IP }}', 5432);"
 
     - name: Create PostgreSQL cluster
-      shell: |
-        expect -c '
-          spawn /bin/bash -c "/home/{{ user }}/csle/metastore && make cluster"
-          expect -re ".*Password.*"
-          send "postgres\r"
-          interact
-        '
+      expect:
+        command: /bin/bash -c "cd /home/{{ user }}/csle/metastore && make cluster"
+        responses:
+          ".*Password.*": "postgres\r"
+      register: make_cluster_result
+
+    - debug:
+        var: make_cluster_result
 
     - name: Create PostgreSQL tables
-      shell: |
-        expect -c '
-          spawn /bin/bash -c "/home/{{ user }}/csle/metastore && make tables"
-          expect -re ".*Password.*"
-          send "postgres\r"
-          interact
-        '
+      expect:
+        command: /bin/bash -c "cd /home/{{ user }}/csle/metastore && make tables"
+        responses:
+          ".*Password.*": "postgres\r"
+      register: make_tables_result
+
+    - debug:
+        var: make_tables_result
 
     - name: Change mode and ownership of the /var/log/postgresql
       file:
